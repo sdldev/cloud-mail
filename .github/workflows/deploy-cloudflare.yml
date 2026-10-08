@@ -211,14 +211,15 @@ jobs:
         working-directory: ./mail-worker
         run: |
           echo "🚀 Starting deployment..."
+          set +e
           pnpm wrangler deploy -c wrangler-action.toml 2>&1 \
             | tee deploy.log \
             | grep -v "https://.*\.workers\.dev" \
-            | sed -E 's/env\.domain .*/env.domain (***)/' \
-            || true
-          
+            | sed -E 's/env\.domain .*/env.domain (***)/'
           DEPLOY_EXIT_CODE=${PIPESTATUS[0]}
-          if [ $DEPLOY_EXIT_CODE -ne 0 ]; then
+          set -e
+
+          if [ "$DEPLOY_EXIT_CODE" -ne 0 ]; then
             exit 1
           fi
           
