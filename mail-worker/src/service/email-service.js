@@ -23,6 +23,7 @@ import domainUtils from '../utils/domain-uitls';
 import account from "../entity/account";
 import { att } from '../entity/att';
 import telegramService from './telegram-service';
+import smtpClient from '../utils/smtp-client';
 
 const emailService = {
 
@@ -261,7 +262,7 @@ const emailService = {
 			attachments = [] //附件
 		} = params;
 
-		const { resendTokens, r2Domain, send, domainList } = await settingService.query(c);
+		const { resendTokens, r2Domain, send, domainList, smtpStatus, smtpHost, smtpPort, smtpSsl, smtpUsername, smtpPassword } = await settingService.query(c);
 
 		let { imageDataList, html } = await attService.toImageUrlHtml(c, content);
 
@@ -329,9 +330,10 @@ const emailService = {
 		const domain = emailUtils.getDomain(accountRow.email);
 		const resendToken = resendTokens[domain];
 		const useCloudflareEmail = !!c.env.email;
+		const useSmtp = smtpStatus === settingConst.smtpStatus.OPEN && !!smtpHost && !!smtpUsername;
 
 		//如果接收方存在站外邮箱，又没有发信服务
-		if (!useCloudflareEmail && !resendToken && !allInternal) {
+		if (!useSmtp && !useCloudflareEmail && !resendToken && !allInternal) {
 			throw new BizError(t('noSendProvider'));
 		}
 
@@ -357,10 +359,22 @@ const emailService = {
 
 		let sendResult = {};
 
-		//存在站外邮箱时，如果配置了 Cloudflare Email Service 就优先使用，否则使用 Resend
+		//存在站外邮箱时，优先使用已启用的 SMTP，其次 Cloudflare Email Service，最后 Resend
 		if (!allInternal) {
 
-			if (useCloudflareEmail) {
+			if (useSmtp) {
+				sendResult = await this.sendBySmtp(c, {
+					name,
+					accountEmail: accountRow.email,
+					receiveEmail,
+					subject,
+					text,
+					html,
+					attachments: [...imageDataList, ...attachments],
+					sendType,
+					messageId: emailRow.messageId
+				});
+			} else if (useCloudflareEmail) {
 				sendResult = await this.sendByCloudflareEmail(c, {
 					name,
 					accountEmail: accountRow.email,
@@ -408,7 +422,7 @@ const emailService = {
 		emailData.content = html;
 		emailData.text = text;
 		emailData.accountId = accountId;
-		emailData.status = useCloudflareEmail ? emailConst.status.DELIVERED : emailConst.status.SENT;
+		emailData.status = useCloudflareEmail && !useSmtp ? emailConst.status.DELIVERED : emailConst.status.SENT;
 		emailData.type = emailConst.type.SEND;
 		emailData.userId = userId;
 		emailData.resendEmailId = data?.id;
@@ -528,6 +542,35 @@ const emailService = {
 		}
 
 		return await resend.emails.send(sendForm);
+	},
+
+	async sendBySmtp(c, params) {
+
+		const { smtpHost, smtpPort, smtpSsl, smtpUsername, smtpPassword } = await settingService.query(c);
+
+		try {
+			return await smtpClient.sendMail(
+				{
+					host: smtpHost,
+					port: smtpPort,
+					ssl: smtpSsl === 1,
+					username: smtpUsername,
+					password: smtpPassword
+				},
+				{
+					from: params.accountEmail,
+					fromName: params.name,
+					to: [...params.receiveEmail],
+					subject: params.subject,
+					text: params.text,
+					html: params.html,
+					attachments: await this.toResendAttachments(params.attachments),
+					replyMessageId: params.sendType === 'reply' ? params.messageId : null
+				}
+			);
+		} catch (e) {
+			throw new BizError(t('smtpSendFail', { msg: e.message }));
+		}
 	},
 
 	async toCloudflareAttachments(attachments) {

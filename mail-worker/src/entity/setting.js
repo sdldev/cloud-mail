@@ -67,6 +67,12 @@ export const setting = sqliteTable('setting', {
 	webhookUrl: text('webhook_url').default('').notNull(),
 	webhookStatus: integer('webhook_status').default(1).notNull(),
 	webhookRetry: integer('webhook_retry').default(0).notNull(),
-	webhookSecret: text('webhook_secret').default('').notNull()
+	webhookSecret: text('webhook_secret').default('').notNull(),
+	smtpStatus: integer('smtp_status').default(1).notNull(),
+	smtpHost: text('smtp_host').default('').notNull(),
+	smtpPort: integer('smtp_port').default(465).notNull(),
+	smtpSsl: integer('smtp_ssl').default(1).notNull(),
+	smtpUsername: text('smtp_username').default('').notNull(),
+	smtpPassword: text('smtp_password').default('').notNull()
 });
 export default setting

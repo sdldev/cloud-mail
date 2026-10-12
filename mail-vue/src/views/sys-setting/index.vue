@@ -205,6 +205,28 @@
                 </div>
               </div>
               <div class="setting-item">
+                <div>
+                  <span>{{ $t('smtpSending') }}</span>
+                  <el-tooltip effect="dark" :content="$t('smtpSendingDesc')">
+                    <Icon class="warning" icon="fe:warning" width="18" height="18"/>
+                  </el-tooltip>
+                </div>
+                <div>
+                  <el-switch @change="change" :before-change="beforeChange" :active-value="0" :inactive-value="1"
+                             v-model="setting.smtpStatus"/>
+                </div>
+              </div>
+              <div class="setting-item">
+                <div><span>{{ $t('smtpConfiguration') }}</span></div>
+                <div class="forward">
+                  <span>{{ setting.smtpHost ? setting.smtpHost + ':' + setting.smtpPort : $t('smtpNotConfigured') }}</span>
+                  <el-button class="opt-button" style="margin-top: 0" @click="openSmtpForm" size="small"
+                             type="primary">
+                    <Icon icon="fluent:settings-48-regular" width="16" height="18"/>
+                  </el-button>
+                </div>
+              </div>
+              <div class="setting-item">
                 <div><span>{{ $t('blackList') }}</span></div>
                 <div>
                   <el-button class="opt-button" style="margin-top: 0" @click="openBlackListForm" size="small"
@@ -858,6 +880,31 @@ Authorization: &lt;secret&gt;</pre>
           </div>
         </form>
       </el-dialog>
+      <el-dialog v-model="smtpShow" :title="t('smtpConfiguration')" width="340" @closed="resetSmtpForm">
+        <form @submit.prevent>
+          <el-input class="dialog-input" type="text" :placeholder="$t('smtpHost')" v-model="smtp.smtpHost"
+                    @keyup.enter="saveSmtp"/>
+          <el-input class="dialog-input" type="number" :placeholder="$t('smtpPort')" v-model="smtp.smtpPort"
+                    @keyup.enter="saveSmtp"/>
+          <el-input class="dialog-input" type="text" :placeholder="$t('smtpUsername')" v-model="smtp.smtpUsername"
+                    @keyup.enter="saveSmtp"/>
+          <el-input class="dialog-input" type="password" show-password
+                    :placeholder="setting.smtpPassword || $t('smtpPassword')" v-model="smtp.smtpPassword"
+                    @keyup.enter="saveSmtp"/>
+          <div class="force-path-style">
+            <div class="force-path-style-left">
+              <span>SSL</span>
+              <el-tooltip effect="dark" :content="$t('smtpSslDesc')">
+                <Icon class="warning" icon="fe:warning" width="18" height="18"/>
+              </el-tooltip>
+            </div>
+            <el-switch :active-value="1" :inactive-value="0" v-model="smtp.smtpSsl"/>
+          </div>
+          <div class="s3-button">
+            <el-button type="primary" :loading="settingLoading" @click="saveSmtp">{{ t('save') }}</el-button>
+          </div>
+        </form>
+      </el-dialog>
       <el-dialog v-model="emailPrefixShow" :title="t('emailPrefix')"  @closed="resetEmailPrefix"  >
         <div class="email-prefix">
           <div>{{ t('atLeast') }}</div>
@@ -996,6 +1043,14 @@ let regVerifyCount = ref(1)
 let addVerifyCount = ref(1)
 let backup = '{}'
 const addS3Show = ref(false)
+const smtpShow = ref(false)
+const smtp = reactive({
+  smtpHost: '',
+  smtpPort: 465,
+  smtpSsl: 1,
+  smtpUsername: '',
+  smtpPassword: ''
+})
 const addVerifyCountShow = ref(false)
 const regVerifyCountShow = ref(false)
 const resendTokenForm = reactive({
@@ -1373,6 +1428,30 @@ function saveS3() {
   editSetting(form)
 }
 
+function openSmtpForm() {
+  smtp.smtpHost = setting.value.smtpHost || ''
+  smtp.smtpPort = setting.value.smtpPort || 465
+  smtp.smtpSsl = setting.value.smtpSsl === 0 ? 0 : 1
+  smtp.smtpUsername = setting.value.smtpUsername || ''
+  smtp.smtpPassword = ''
+  smtpShow.value = true
+}
+
+function resetSmtpForm() {
+  smtp.smtpPassword = ''
+}
+
+function saveSmtp() {
+  const form = {
+    smtpHost: (smtp.smtpHost || '').trim(),
+    smtpPort: Number(smtp.smtpPort) || 465,
+    smtpSsl: smtp.smtpSsl,
+    smtpUsername: (smtp.smtpUsername || '').trim()
+  }
+  if (smtp.smtpPassword) form.smtpPassword = smtp.smtpPassword
+  editSetting(form)
+}
+
 function tgBotSave() {
   const form = {
     customDomain: customDomain.value,
@@ -1691,6 +1770,7 @@ function change(e) {
   delete settingForm.s3AccessKey
   delete settingForm.s3SecretKey
   delete settingForm.tgBotToken
+  delete settingForm.smtpPassword
   delete settingForm.resendTokens
   editSetting(settingForm, false)
 }
